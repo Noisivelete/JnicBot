@@ -5,6 +5,8 @@
 package net.noisivelet.jnicbot.Utils;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.GuildChannel;
 import net.dv8tion.jda.api.entities.Message;
@@ -16,15 +18,15 @@ import net.dv8tion.jda.api.entities.Message;
 public class Config {
     public final Guild guild;
     private GuildChannel updates;
-    private Message jnicparaMessage;
-    private Message jnicparaFrasesMessage;
+    private ArrayList<Message> jnicparaMessages;
+    private ArrayList<Message> jnicparaFrasesMessages;
 
-    public Config(Guild guild, GuildChannel updates, Message jnicparaMessage, Message jnicparaFrasesMessage) throws IllegalStateException {
+    public Config(Guild guild, GuildChannel updates, ArrayList<Message> jnicparaMessages, ArrayList<Message> jnicparaFrasesMessages) throws IllegalStateException {
         assertCorrectChannelType(updates);
         this.guild = guild;
         this.updates = updates;
-        this.jnicparaMessage = jnicparaMessage;
-        this.jnicparaFrasesMessage = jnicparaFrasesMessage;
+        this.jnicparaMessages = jnicparaMessages;
+        this.jnicparaFrasesMessages = jnicparaFrasesMessages;
     }
     
     private void assertCorrectChannelType(GuildChannel channel) throws IllegalStateException{
@@ -46,30 +48,70 @@ public class Config {
         
     }
     
-    public void setJnicparaMessages(Message palabras, Message frases) throws SQLException{
+    public void setJnicparaMessages(ArrayList<Message> palabras, ArrayList<Message> frases) throws SQLException{
         try{
-            Database.queryDML("UPDATE servers SET message_id=?, message_id_channel=?, message_id_frases=? WHERE server_id=?", palabras.getId(), palabras.getChannel().getId(), frases.getId(), guild.getId());
+            String idChannel=null;
+            if(!palabras.isEmpty()){
+                idChannel=palabras.get(0).getChannel().getId();
+            }
+            Database.queryDML("UPDATE servers SET message_id_channel=? WHERE server_id=?", idChannel, guild.getId());
+            jnicparaMessages=palabras;
+            jnicparaFrasesMessages=frases;
+            updateMessagesInDatabase();
         } catch(SQLException ex){
             throw ex;
         }
-        jnicparaMessage=palabras;
-        jnicparaFrasesMessage=frases;
     }
     
     public GuildChannel getUpdatesChannel(){
         return updates;
     }
     
-    public Message getJnicparaMessage(){
-        return jnicparaMessage;
+    public Message getJnicparaMessage(int id){
+        return jnicparaMessages.get(id);
     }
     
-    public Message getJnicparaFrasesMessage(){
-        return jnicparaFrasesMessage;
+    public Message getJnicparaFrasesMessage(int id){
+        return jnicparaFrasesMessages.get(id);
+    }
+    
+    public Message getLastJnicparaMessage(){
+        return jnicparaMessages.get(jnicparaMessages.size()-1);
+    }
+    
+    public Message getLastJnicparaFrasesMessage(){
+        return jnicparaFrasesMessages.get(jnicparaFrasesMessages.size()-1);
+    }
+    
+    public ArrayList<Message> getJnicparaMessages(){
+        return jnicparaMessages;
+    }
+    
+    public ArrayList<Message> getJnicparaFrasesMessages(){
+        return jnicparaFrasesMessages;
+    }
+    
+    public void addJnicparaMessage(Message nuevo) throws SQLException{
+        jnicparaMessages.add(nuevo);
+        Database.queryInsert("INSERT INTO servers_mensajes VALUES(?,?,?,?)", guild.getId(), Entrada.Tipo.palabras.name(), (jnicparaMessages.size()-1)+"", jnicparaMessages.get(0).getId());
+        
     }
     
     public void addToDatabase() throws SQLException{
-        Database.queryInsert("INSERT INTO servers VALUES(?,?,?,?,?)", guild.getId(), updates==null?null:updates.getId(), jnicparaMessage==null?null:jnicparaMessage.getId(), jnicparaMessage==null?null:jnicparaMessage.getChannel().getId(), jnicparaFrasesMessage==null?null:jnicparaFrasesMessage.getId());
+        Database.queryInsert("INSERT INTO servers VALUES(?,?,?)", guild.getId(), updates==null?null:updates.getId(), jnicparaMessages==null?null:jnicparaMessages.get(0).getChannel().getId());
+        if(jnicparaMessages == null)
+            return;
+        updateMessagesInDatabase();
+    }
+    
+    private void updateMessagesInDatabase() throws SQLException{
+        Database.queryDML("DELETE FROM servers_mensajes WHERE server_id=?", guild.getId());
+        for(int i=0;i<jnicparaMessages.size();i++){
+            Database.queryInsert("INSERT INTO servers_mensajes VALUES(?,?,?,?)", guild.getId(), Entrada.Tipo.palabras.name(), i+"", jnicparaMessages.get(i).getId());
+        }
+        for(int i=0;i<jnicparaFrasesMessages.size();i++){
+            Database.queryInsert("INSERT INTO servers_mensajes VALUES(?,?,?,?)", guild.getId(), Entrada.Tipo.frases.name(), i+"", jnicparaFrasesMessages.get(i).getId());
+        }
     }
     
     public void removeFromDatabase() throws SQLException{

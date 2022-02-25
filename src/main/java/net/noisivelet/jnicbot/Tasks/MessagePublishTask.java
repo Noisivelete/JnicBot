@@ -5,11 +5,16 @@
 package net.noisivelet.jnicbot.Tasks;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageChannel;
+import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.noisivelet.jnicbot.Utils.Config;
 import net.noisivelet.jnicbot.Utils.Database;
@@ -20,38 +25,33 @@ import net.noisivelet.jnicbot.Utils.EmbededMessages;
  * @author Francis
  */
 public class MessagePublishTask implements Runnable{
-    private final CompletableFuture<Message> sent_msg, sent_msg_frases;
+    private final GuildMessageChannel channel;
     private final CompletableFuture<InteractionHook> hook;
+    private Guild g;
 
-    public MessagePublishTask(CompletableFuture<Message> sent_msg, CompletableFuture<Message> sent_msg_frases, CompletableFuture<InteractionHook> hook) {
-        this.sent_msg = sent_msg;
-        this.sent_msg_frases = sent_msg_frases;
+    /**
+     * Configura una nueva tarea de publicación del diccionario. Esta tarea depende de un InteractionHook, y mandará feedback sobre las acciones que se realicen.
+     * @param hook Un CompletableFuture del InteractionHook que se usará en esta tarea.
+     * @param channel Canal donde se publicará el diccionario.
+     */
+    public MessagePublishTask(CompletableFuture<InteractionHook> hook, GuildMessageChannel channel) {
         this.hook = hook;
+        this.channel = channel;
+    }
+    
+    /**
+     * Configura una tarea de publicación del diccionario que no depende de ningún InteractionHook. Debido a esto, no se enviará ningún mensaje de feedback.
+     * @param channel Canal donde publicar los mensajes del diccionario.
+     * @param g Guild donde se producirá esta publicación.
+     */
+    public MessagePublishTask(GuildMessageChannel channel, Guild g){
+        hook=null;
+        this.channel=channel;
+        this.g=g;
     }
 
     @Override
     public void run() {
-        try {
-            InteractionHook hook=this.hook.get();
-            Message msg, msg_frases;
-            try{
-                msg=sent_msg.get();
-                msg_frases=sent_msg_frases.get();
-            } catch(ExecutionException ex){
-                ex.printStackTrace();
-                return;
-            }
-            Config serverConfig=Database.config.get(hook.getInteraction().getGuild());
-            Message jnicparaAntiguo=serverConfig.getJnicparaMessage();
-            Message jnicparaFrasesAntiguo=serverConfig.getJnicparaFrasesMessage();
-            serverConfig.setJnicparaMessages(msg, msg_frases);
-            if(jnicparaAntiguo != null){
-                jnicparaAntiguo.delete().submit();
-                jnicparaFrasesAntiguo.delete().submit();
-            }
-            hook.sendMessage(EmbededMessages.successEmbed("Mensaje actualizado", "El mensaje anterior (si había alguno) ya no se actualizará automáticamente; lo hará el nuevo mensaje creado.")).submit();
-        } catch (InterruptedException | ExecutionException | SQLException ex) {
-            ex.printStackTrace();
-        }
+        Database.publicarJnicpara(hook, channel, g);
     }
 }

@@ -6,12 +6,14 @@ package net.noisivelet.jnicbot.Listeners;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.ChannelType;
 import net.dv8tion.jda.api.entities.GuildChannel;
+import net.dv8tion.jda.api.entities.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -25,6 +27,7 @@ import net.noisivelet.jnicbot.Utils.Config;
 import net.noisivelet.jnicbot.Utils.Database;
 import net.noisivelet.jnicbot.Utils.EmbededMessages;
 import net.noisivelet.jnicbot.Utils.Entrada;
+import net.noisivelet.jnicbot.Utils.Entrada.Tipo;
 import net.noisivelet.jnicbot.Utils.Utils;
 
 /**
@@ -67,7 +70,7 @@ public class SlashCommandEventListener extends ListenerAdapter{
                     ex.printStackTrace();
                     event.reply(EmbededMessages.errorEmbed("Error de conexión a la base de datos", "Ha ocurrido un error conectando a la base de datos. No se ha podido añadir la palabra.")).setEphemeral(true).queue();
                 }
-                Database.añadirPalabra(nueva_palabra);
+                Database.añadir(nueva_palabra, Tipo.palabras, true);
                 
                 event.reply(EmbededMessages.successEmbed("Jnicpara actualizado", "Palabra añadida al jnicpara.")).setEphemeral(true).queue();
             }
@@ -101,7 +104,7 @@ public class SlashCommandEventListener extends ListenerAdapter{
                     ex.printStackTrace();
                     event.reply(EmbededMessages.errorEmbed("Error de conexión a la base de datos", "Ha ocurrido un error conectando a la base de datos. No se ha podido añadir la frase.")).setEphemeral(true).queue();
                 }
-                Database.añadirFrase(nueva_frase);
+                Database.añadir(nueva_frase, Tipo.frases, true);
                 
                 event.reply(EmbededMessages.successEmbed("Jnicpara actualizado", "Frase añadida al jnicpara.")).setEphemeral(true).queue();
             }
@@ -115,17 +118,9 @@ public class SlashCommandEventListener extends ListenerAdapter{
                     event.reply(EmbededMessages.errorEmbed("Permisos insuficientes", "Necesitas el permiso `Gestionar Servidor` para poder cambiar dónde se publica el jnicpara en este servidor.")).setEphemeral(true).queue();
                     return;
                 }
-                MessageChannel channel=event.getChannel();
-                CompletableFuture<Message> msg_future, msg_future_frases;
-                try{
-                    msg_future=channel.sendMessage(Database.getJnicpara()).submit();
-                    msg_future_frases=channel.sendMessage(Database.getJnicparaFrases()).submit();
-                } catch(InsufficientPermissionException ex){
-                    event.reply(EmbededMessages.errorEmbed("Error de permisos", "La acción no se ha podido completar porque el bot no tiene permiso para publicar mensajes en el canal. Revisa los permisos (El bot necesita permiso para ver el canal y para publicar mensajes en él)")).setEphemeral(true).submit();
-                    return;
-                }
+                GuildMessageChannel channel=(GuildMessageChannel)event.getChannel();
                 CompletableFuture<InteractionHook> hook=event.deferReply(true).submit();
-                JnicBot.EXECUTOR.submit(new MessagePublishTask(msg_future, msg_future_frases, hook));
+                JnicBot.EXECUTOR.submit(new MessagePublishTask(hook, channel));
             }
             
             case "frase-random" -> {
